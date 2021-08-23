@@ -20,21 +20,208 @@
 ![Lab1](./assets/Lab1.png)
 ## 源程序
 本实验首先要**修改内核代码**，使用装有gcc和g++的Fedora 7操作系统，通过wget命令获取Linux内核，内核版本为2.6.21，然后用sudo tar命令解压。
-1. 修改include/linux/sched.h中的存储进程控制块
-![Lab1-1](./assets/Lab1-1.png)
-2. 在进程创建时对cloak初始化为0（不隐藏）
-![Lab1-2](./assets/Lab1-2.png)
-3. 创建hide系统调用，在fs/proc/base.c中添加：首先用find_task_by_pid()函数查找进程，然后根据on参数设置cloak，最后调用函数proc_flush_task()来清除VFS层缓冲。
-![Lab1-3](./assets/Lab1-3.png)
-4. 修改同一文件下的proc_pid_readdir()函数以及proc_pid_lookup()函数过滤掉被隐藏的进程。
-proc_pid_readdir()如下
-![Lab1-4](./assets/Lab1-4.png)
-proc_pid_lookup()如下
-![Lab1-5](./assets/Lab1-5.png)
+
+源文件 include/linux/sched.h
+
+```c++
+struct task_struct {
+volatile long state;
+struct thread_info *thread_info;
+atomic_t usage;
+unsigned long flags;
+unsigned long ptrace;
+int cloak;      //为1时表示该进程需要隐藏
+int lock_depth;
+}
+```
+
+ 
+
+源文件fs/proc/base.c
+
+```c++
+struct dentry *proc_pid_lookup( struct inode *dir, struct dentry * dentry, struct nameidata *nd )
+{
+	struct dentry		*result = ERR_PTR( -ENOENT );
+	struct task_struct	*task;
+	unsigned		tgid;
+	result = proc_base_lookup( dir, dentry );
+	if ( !IS_ERR( result ) || PTR_ERR( result ) != -ENOENT )
+		goto out;
+	tgid = name_to_int( dentry );
+	if ( tgid == ~0U )
+		goto out;
+	rcu_read_lock();
+	task = find_task_by_pid( tgid );
+	if ( task )
+		get_task_struct( task );
+	rcu_read_unlock();
+	if ( !task )
+		goto out;
+	if ( task->cloak == 1 && hidden_flag != 0 )
+		goto out;
+	result = proc_pid_instantiate( dir, dentry, task, NULL );
+	put_task_struct( task );
+out:
+	/* printk("proc_pid_lookup hidden_flag=%d\n",hidden_flag); */
+	return(result);
+}
+int proc_pid_readdir( struct file * filp, void * dirent, filldir_t filldir )
+{
+	unsigned int nr = filp->f_pos - FIRST_PROCESS_ENTRY;
+	struct task_struct *reaper = get_proc_task( filp->f_path.dentry->d_inode );
+	struct task_struct *task;
+	int tgid;
+	if ( !reaper )
+		goto out_no_task;
+	for (; nr < ARRAY_SIZE( proc_base_stuff ); filp->f_pos++, nr++ )
+	{
+		struct pid_entry *p = &proc_base_stuff[nr];
+		if ( proc_base_fill_cache( filp, dirent, filldir, reaper, p ) < 0 )
+			goto out;
+	}
+	tgid = filp->f_pos - TGID_OFFSET;
+	for ( task = next_tgid( tgid );task;put_task_struct( task ), task = next_tgid( tgid + 1 ) )
+	{
+		tgid = task->pid;
+		filp->f_pos = tgid + TGID_OFFSET;
+		if ( hidden_flag == 0 )
+		{
+			if ( proc_pid_fill_cache( filp, dirent, filldir, task, tgid ) < 0 )
+			{
+				put_task_struct( task );
+				goto out;
+			}
+		} else {
+			if ( task->cloak == 0 && proc_pid_fill_cache( filp, dirent, filldir, task, tgid ) < 0 )
+			{
+				put_task_struct( task );
+				goto out;
+			}
+		}
+	}
+	filp->f_pos = PID_MAX_LIMIT + TGID_OFFSET;
+
+out:
+	put_task_struct( reaper );
+out_no_task:
+	printk( "proc_pid_readdir hidden_flag=%d\n", hidden_flag );
+	return(0);
+}
+```
+
+源文件fs/proc/proc_misc.c
+
+```c++
+int hidden_flag = 1;
+EXPORT_SYMBOL( hidden_flag );
+/* 将内核中的hidden_flag值写回到hidden文件中 */
+static int proc_read_hidden( char* page, char** start, off_t off, int count, int *eof, void *data )
+{
+	/* hidden's read callback function */
+	int length;
+	length = sprintf( page, "%d", hidden_flag );
+	/* printk("proc_read_hidden %d\n", hidden_flag); */
+	*eof = 1;
+	return(length);
+}
+/* 读取hidden文件中的值到内核的hidden_flag变量中 */
+static int proc_write_hidden( struct file* file, const char *buffer, unsigned long count, void *data )
+{
+	/* hidden's write callback function */
+	hidden_flag = buffer[0] - '0';
+	/* printk("proc_write_hidden %c\n", buffer[0]); */
+	return(0);
+}
+/* 将所有隐藏的pid值写回到hidden_process文件中,不考虑hidden的值 */
+static int proc_read_hidden_process( char* page, char** start, off_t off, int count, int *eof, void *data )
+{
+	/* hidden_process's read callback function */
+	struct task_struct *task = NULL;
+	int num = 0;
+	for_each_process( task )
+	{
+		if ( task->cloak == 1 )
+		{
+			sprintf( page + num, "%-4d ", task->pid );
+			num += 5;
+			printk( "%d\n", task->pid );
+		}
+	}
+	*eof = 1;
+	return(num);
+}
+/* 添加hidden和hidden_process两个文件的指针 */
+void __init proc_misc_init( void )
+{
+	//……
+	struct proc_dir_entry * hidefile;
+	hidefile = create_proc_entry( "hidden", 0644, NULL );
+	hidefile->read_proc = proc_read_hidden;
+	hidefile->write_proc = proc_write_hidden;
+	struct proc_dir_entry *hideprocessfile;
+	hideprocessfile = create_proc_read_entry( "hidden_process", 0444, NULL, proc_read_hidden_process );
+}
+int hidden_flag=1;
+EXPORT_SYMBOL(hidden_flag);
+// 将内核中的hidden_flag值写回到hidden文件中
+
+static int proc_read_hidden(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+    // hidden's read callback function
+    int length;
+    length = sprintf(page, "%d", hidden_flag);
+    //printk("proc_read_hidden %d\n", hidden_flag);
+    *eof = 1;
+    return length;
+}
+// 读取hidden文件中的值到内核的hidden_flag变量中
+static int proc_write_hidden(struct file *file, const char *buffer, unsigned long count, void *data)
+{
+    // hidden's write callback function
+    hidden_flag = buffer[0] - '0';
+    //printk("proc_write_hidden %c\n", buffer[0]);
+    return 0;
+}
+// 将所有隐藏的pid值写回到hidden_process文件中,不考虑hidden的值
+static int proc_read_hidden_process(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+    // hidden_process's read callback function
+    struct task_struct *task = NULL;
+    int num = 0;
+    for_each_process(task)
+    {
+        if (task->cloak == 1)
+        {
+            sprintf(page + num, "%-4d ", task->pid);
+            num += 5;
+            printk("%d\n", task->pid);
+        }
+    }
+    *eof = 1;
+    return num;
+}
+// 添加hidden和hidden_process两个文件的指针
+void __init proc_misc_init(void)
+{
+    //……
+    struct proc_dir_entry *hidefile;
+    hidefile = create_proc_entry("hidden", 0644, NULL);
+    hidefile->read_proc = proc_read_hidden;
+    hidefile->write_proc = proc_write_hidden;
+    struct proc_dir_entry *hideprocessfile;
+    hideprocessfile = create_proc_read_entry("hidden_process", 0444, NULL, proc_read_hidden_process);
+}
+```
+
+
+
+
 
 之后使用make等命令编译修改过的内核（通过Linux官方文档、CSDN等查找编译过程。由于该过程过于复杂，且跟着各种博客一步一步做完之后思维非常混乱，忘记了编译过程，此处无法给出）。
 再次启动时，会提示选择内核，选择seu，即上述步骤编译后得到的内核。
 ![Lab1-14](./assets/Lab1-14.png)
+
 ## 程序运行时的初值和运行结果
 1. **隐藏特定用户的进程**
 首先使用id命令查看用户id
