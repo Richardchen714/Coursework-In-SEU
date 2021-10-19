@@ -19,7 +19,7 @@ Image Translation::imageTranslation(Image image,double x,double y)
             //算出(x',y')在原图像中的坐标
             xOri=i-x;
             yOri=j-y;
-            if((xOri>sizeX)||(xOri<0)||(yOri>sizeY)||(yOri<0))//如果在原图像中没有点
+            if((xOri>=sizeX)||(xOri<0)||(yOri>=sizeY)||(yOri<0))//如果在原图像中没有点
             {
                 newImage.pixel[i][j]=0;
                 continue;

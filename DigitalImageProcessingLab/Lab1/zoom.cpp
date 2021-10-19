@@ -18,7 +18,7 @@ Image Zoom::ZoomImage(Image image, double scale)//scale为缩放倍数
             //算出(x',y')在原图像中的坐标
             x=i/scale;
             y=j/scale;
-            if((x>oriX)||(x<0)||(y>oriY)||(y<0))//如果在原图像中没有点
+            if((x>=oriX)||(x<0)||(y>=oriY)||(y<0))//如果在原图像中没有点
             {
                 newImage.pixel[i][j]=0;
                 continue;
