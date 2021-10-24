@@ -22,7 +22,7 @@ Image::Image(QString path)
     for(int i=0;i<x;i++)
         for(int j=0;j<y;j++)
         {
-            this->pixel[i][j]=qGray(qimage.pixelColor(i,j).rgb())>>5;//转化为灰度值为0-7
+            this->pixel[i][j]=qGray(qimage.pixelColor(i,j).rgb());//转化为灰度值为0-7
         }
 }
 Image::Image(QImage qimage)
@@ -37,7 +37,7 @@ Image::Image(QImage qimage)
         for(int j=0;j<y;j++)
         {
 
-            this->pixel[i][j]=qGray(qimage.pixelColor(i,j).rgb())>>5;//转化为灰度值为0-7
+            this->pixel[i][j]=qGray(qimage.pixelColor(i,j).rgb());
         }
 }
 QPixmap Image::getPixmap()
@@ -48,8 +48,8 @@ QPixmap Image::getPixmap()
     for(int i=0;i<this->x;i++)
         for(int j=0;j<this->y;j++)
         {
-            //左移5位转化为256位灰度，并将rgb均设置为灰度值
-            qcolor.setRgb(pixel[i][j]<<5,pixel[i][j]<<5,pixel[i][j]<<5);
+            //将rgb均设置为灰度值
+            qcolor.setRgb(pixel[i][j],pixel[i][j],pixel[i][j]);
             qimage.setPixelColor(i,j,qcolor);
         }
     QPixmap pixmap;

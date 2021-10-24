@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     Widget w;
-    /*注释为保存旋转30°的图片的代码操作
+
     Rotate rotate;
     QString path="C:/Users/richardchen0714/Documents/Image/barbara.bmp";
     Image image(path);
@@ -20,11 +20,11 @@ int main(int argc, char *argv[])
     for(int i=0;i<qimage.width();i++)
         for(int j=0;j<qimage.height();j++)
         {
-            //左移5位转化为256位灰度，并将rgb均设置为灰度值
-            qcolor.setRgb(rotated.pixel[i][j]<<5,rotated.pixel[i][j]<<5,rotated.pixel[i][j]<<5);
+            //将rgb均设置为灰度值
+            qcolor.setRgb(rotated.pixel[i][j],rotated.pixel[i][j],rotated.pixel[i][j]);
             qimage.setPixelColor(i,j,qcolor);
         }
-    qimage.save("C:/Users/richardchen0714/Documents/Image/barbara_30.bmp");*/
+    qimage.save("C:/Users/richardchen0714/Documents/Image/barbara_30.bmp");
     w.setWindowTitle("Image Transformation");
     w.show();
     return a.exec();
