@@ -3,3 +3,5 @@ This is my coursework in SEU (3rd and 4th year, mostly in Chinese), which includ
 - Operating Systems Labwork (OSLab)
 - Digital Image Processing
 - Database System Labwork (DatabaseLab)
+- Compiler Lab
+- Deep Learning Seminar File
