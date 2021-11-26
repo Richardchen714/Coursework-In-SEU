@@ -1,5 +1,4 @@
 # Lab Project 4
-09019118 陈鸿卓
 [TOC]
 ## 实验内容
 对数据库分别设置Domain integrity constraint, entity integrity constraint 和 referential integrity constraint，并使用SQL语句INSERT, DELETE 和 UPDATE 来测试设置的完整性约束。
